@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Workspace, WorkspaceMember, Task
+from .models import Workspace, WorkspaceMember, Task, Notification
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -37,3 +37,20 @@ class TaskSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("You are not a member of this workspace")
 
         return data
+    
+
+class NotificationSerializer(serializers.ModelSerializer):
+    sender_username = serializers.CharField(source='sender.username', read_only=True)
+
+    class Meta:
+        model = Notification
+        fields = [
+            'id',
+            'sender',
+            'sender_username',
+            'receiver',
+            'task',
+            'message',
+            'is_read',
+            'created_at'
+        ]
