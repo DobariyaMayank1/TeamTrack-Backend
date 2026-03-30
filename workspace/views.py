@@ -145,3 +145,17 @@ class MarkAsReadView(APIView):
         notification.save()
 
         return Response({"message": "Notification marked as read"})
+
+
+class WorkspaceListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # 👉 get all workspaces where user is a member
+        memberships = WorkspaceMember.objects.filter(user=request.user)
+
+        workspaces = [member.workspace for member in memberships]
+
+        serializer = WorkspaceSerializer(workspaces, many=True)
+
+        return Response(serializer.data)
