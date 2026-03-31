@@ -2,7 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from .models import Workspace, WorkspaceMember, Task, Notification
-from .serializers import WorkspaceSerializer, WorkspaceMemberSerializer, TaskSerializer, NotificationSerializer
+from .serializers import WorkspaceSerializer, WorkspaceMemberSerializer, TaskSerializer, NotificationSerializer, TaskListSerializer
 
 
 class CreateWorkspaceView(APIView):
@@ -89,8 +89,18 @@ class CompleteTaskView(APIView):
         if not is_member:
             return Response({"error": "Not allowed"})
 
-        task.status = 'completed'
+        if task.status == "completed":
+            return Response({"message": "Task already completed"})
+
+        # ✅ read description from request body
+        description = request.data.get("description", "").strip()
+
+        if not description:
+            return Response({"error": "Description is required"}, status=400)
+
+        task.status = "completed"
         task.completed_by = request.user
+        task.description = description  # ✅ save it
         task.save()
 
         # 🔔 create notifications
@@ -112,16 +122,80 @@ class TaskListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, workspace_id):
-        status = request.GET.get('status')  # pending / completed
+        status = request.query_params.get('status')
 
-        tasks = Task.objects.filter(workspace_id=workspace_id)
+        tasks = Task.objects.filter(workspace_id=workspace_id).select_related('created_by', 'completed_by')
 
         if status:
             tasks = tasks.filter(status=status)
 
-        serializer = TaskSerializer(tasks, many=True)
+        serializer = TaskListSerializer(tasks, many=True)  # ✅ use new serializer
         return Response(serializer.data)
     
+
+class UpdateTaskView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, task_id):
+        try:
+            task = Task.objects.get(id=task_id)
+        except Task.DoesNotExist:
+            return Response({"error": "Task not found"}, status=404)
+
+        # ✅ check workspace membership
+        is_member = WorkspaceMember.objects.filter(
+            user=request.user,
+            workspace=task.workspace
+        ).exists()
+
+        if not is_member:
+            return Response({"error": "Not allowed"}, status=403)
+
+        # ✅ OPTIONAL: restrict edit (recommended)
+        # if task.created_by != request.user:
+        #     return Response({"error": "Only creator can edit"}, status=403)
+
+        # ✅ update fields
+        title = request.data.get("title")
+        if title is not None and not title.strip():
+            return Response({"error": "Title cannot be empty"}, status=400)
+
+        if title:
+            task.title = title.strip()
+            
+        task.description = request.data.get("description", task.description)
+
+        task.save()
+
+        return Response({"message": "Task updated successfully"})
+    
+
+class DeleteTaskView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, task_id):
+        try:
+            task = Task.objects.get(id=task_id)
+        except Task.DoesNotExist:
+            return Response({"error": "Task not found"}, status=404)
+
+        # ✅ check workspace membership
+        is_member = WorkspaceMember.objects.filter(
+            user=request.user,
+            workspace=task.workspace
+        ).exists()
+
+        if not is_member:
+            return Response({"error": "Not allowed"}, status=403)
+
+        # ✅ only creator can delete (recommended)
+        # if task.created_by != request.user:
+        #     return Response({"error": "Only creator can delete"}, status=403)
+
+        task.delete()
+
+        return Response({"message": "Task deleted successfully"})
+
 
 class NotificationListView(APIView):
     permission_classes = [IsAuthenticated]

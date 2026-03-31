@@ -39,6 +39,30 @@ class TaskSerializer(serializers.ModelSerializer):
         return data
     
 
+class TaskListSerializer(serializers.ModelSerializer):
+    completed_by_name = serializers.SerializerMethodField()
+    created_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Task
+        fields = [
+            'id',
+            'title',
+            'description',
+            'status',
+            'created_by_name',
+            'completed_by_name',
+            'created_at',
+            'updated_at',
+        ]
+
+    def get_completed_by_name(self, obj):
+        return obj.completed_by.username if obj.completed_by else None
+
+    def get_created_by_name(self, obj):
+        return obj.created_by.username if obj.created_by else None
+    
+
 class NotificationSerializer(serializers.ModelSerializer):
     sender_username = serializers.CharField(source='sender.username', read_only=True)
 
